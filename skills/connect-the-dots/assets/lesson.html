@@ -372,6 +372,17 @@ const S = {current:-1, viewed:new Set(), layer:{}};
 const KEY = 'ctd:' + LESSON.topic;
 const $ = s => document.querySelector(s);
 function esc(s){return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function pick(v, allowed){return allowed.includes(v) ? v : ''}
+// Lessons are written from source documents that may carry injected markup, so raw SVG loses anything that can run.
+function cleanSvg(s){
+  const root = new DOMParser().parseFromString(String(s ?? ''), 'image/svg+xml').documentElement;
+  if (root.nodeName !== 'svg') return '';
+  root.querySelectorAll('script,foreignObject,iframe,object,embed').forEach(n => n.remove());
+  for (const el of [root, ...root.querySelectorAll('*')]) for (const a of [...el.attributes]){
+    if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name);
+  }
+  return root.outerHTML;
+}
 function inline(s){return esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/==(.+?)==/g,'<mark>$1</mark>').replace(/`(.+?)`/g,'<code>$1</code>')}
 function md(s){
   return String(s ?? '').split(/\n\s*\n/).map(block => {
@@ -403,13 +414,14 @@ function legendHtml(kinds){
 let uid = 0;
 function renderMap(map, focusIds = [], doneIds = new Set(), interactive = true){
   const id = 'm' + (uid++), W = 180, H = 62;
+  map.nodes.forEach(n => { n.x = +n.x || 0; n.y = +n.y || 0; n.w = +n.w || W });
   const maxX = Math.max(...map.nodes.map(n => n.x + (n.w || W))) + 20, maxY = Math.max(...map.nodes.map(n => n.y + H)) + 40;
   let s = `<svg viewBox="0 0 ${maxX} ${maxY}" style="max-width:${Math.round(maxX * 1.05)}px" role="img" aria-label="Concept map">${arrowDefs(id)}`;
   const kinds = new Set(); let labels = '';
   for (const e of map.edges){
     const a = nodeById[e.from] || map.nodes.find(n => n.id === e.from), b = nodeById[e.to] || map.nodes.find(n => n.id === e.to);
     if (!a || !b) continue;
-    const kind = e.kind || 'flow'; kinds.add(kind);
+    const kind = pick(e.kind, Object.keys(EDGE_LEGEND)) || 'flow'; kinds.add(kind);
     const aw = a.w || W, bw = b.w || W;
     const ax = a.x + aw/2, ay = a.y + H/2, bx = b.x + bw/2, by = b.y + H/2, dx = bx - ax, dy = by - ay;
     const clip = (w, sign) => { const t = Math.min((w/2 + 6) / Math.abs(dx || 1e-9), (H/2 + 6) / Math.abs(dy || 1e-9)); return t };
@@ -472,13 +484,13 @@ function renderFlow(p){
   let h = '<div class="flow">';
   p.steps.forEach((st, i) => {
     if (i > 0){ const lab = (p.arrows || [])[i - 1]; h += `<div class="farrow" aria-hidden="true"><span>→</span>${lab ? `<span>${esc(lab)}</span>` : ''}</div>` }
-    h += `<div class="fstep ${st.kind || ''}${p.focus === i ? ' focus' : ''}">${st.who ? `<div class="who">${esc(st.who)}</div>` : ''}<div class="lbl">${i + 1}. ${inline(st.label)}</div>${st.sub ? `<div class="sub">${inline(st.sub)}</div>` : ''}${st.branch ? `<div class="branch">↳ ${inline(st.branch)}</div>` : ''}${p.focus === i ? `<div class="sub" style="color:var(--accent);font-weight:600">◀ ${esc(UI.here.toLowerCase())}</div>` : ''}</div>`;
+    h += `<div class="fstep ${pick(st.kind, ['decision', 'end'])}${p.focus === i ? ' focus' : ''}">${st.who ? `<div class="who">${esc(st.who)}</div>` : ''}<div class="lbl">${i + 1}. ${inline(st.label)}</div>${st.sub ? `<div class="sub">${inline(st.sub)}</div>` : ''}${st.branch ? `<div class="branch">↳ ${inline(st.branch)}</div>` : ''}${p.focus === i ? `<div class="sub" style="color:var(--accent);font-weight:600">◀ ${esc(UI.here.toLowerCase())}</div>` : ''}</div>`;
   });
   return h + '</div>';
 }
 function renderCompare(p){
   function side(x){
-    return `<div class="side ${x.tone || ''}"><div class="band">${esc(x.title)}</div>${x.subtitle ? `<div class="subtitle">${esc(x.subtitle)}</div>` : ''}${x.tagline ? `<div class="tagline">${inline(x.tagline)}</div>` : ''}${x.visual ? renderPicture(x.visual) : ''}
+    return `<div class="side ${pick(x.tone, ['warm', 'cool'])}"><div class="band">${esc(x.title)}</div>${x.subtitle ? `<div class="subtitle">${esc(x.subtitle)}</div>` : ''}${x.tagline ? `<div class="tagline">${inline(x.tagline)}</div>` : ''}${x.visual ? renderPicture(x.visual) : ''}
       <div class="pc"><div class="pros"><h4>Pros</h4><ul>${(x.pros || []).map(t => `<li><span class="ico yes" aria-label="pro">✓</span>${inline(t)}</li>`).join('')}</ul></div>
       <div class="cons"><h4>Cons</h4><ul>${(x.cons || []).map(t => `<li><span class="ico no" aria-label="con">✕</span>${inline(t)}</li>`).join('')}</ul></div></div>
       ${x.when ? `<div class="when"><b>When to use:</b>${inline(x.when)}</div>` : ''}</div>`;
@@ -486,7 +498,7 @@ function renderCompare(p){
   return `<div class="split">${side(p.left)}${side(p.right)}</div>${p.verdict ? `<div class="principle small">${inline(p.verdict)}</div>` : ''}`;
 }
 function renderBeforeAfter(p){
-  const li = it => typeof it === 'string' ? `<li>${inline(it)}</li>` : `<li class="${it.tag === 'removed' ? 'removed' : ''}">${inline(it.text)}${it.tag ? `<span class="tag ${it.tag}">${esc(it.tag.toUpperCase())}</span>` : ''}</li>`;
+  const li = it => typeof it === 'string' ? `<li>${inline(it)}</li>` : `<li class="${it.tag === 'removed' ? 'removed' : ''}">${inline(it.text)}${it.tag ? `<span class="tag ${pick(it.tag, ['new', 'changed', 'removed'])}">${esc(it.tag.toUpperCase())}</span>` : ''}</li>`;
   const panel = x => `<div class="panel"><h4>${esc(x.title)}</h4>${x.visual ? renderPicture(x.visual) : ''}<ul>${(x.items || []).map(li).join('')}</ul>${x.caption ? `<div class="cap">${inline(x.caption)}</div>` : ''}</div>`;
   return `<div class="ba">${panel(p.before)}<div class="mid"><span>➜</span>${esc(p.arrowLabel || '')}</div>${panel(p.after)}</div>${p.caption ? `<div class="principle" style="border-style:dashed;color:var(--bad)">${inline(p.caption)}</div>` : ''}`;
 }
@@ -504,7 +516,7 @@ function renderFigure(p){
 function renderPicture(p){
   if (!p) return '';
   const r = {map:() => renderMap(p.map || LESSON.map, p.focus || [], new Set(), false), sequence:() => renderSequence(p), flow:() => renderFlow(p), compare:() => renderCompare(p),
-    beforeAfter:() => renderBeforeAfter(p), cards:() => renderCards(p), table:() => renderTable(p), figure:() => renderFigure(p), svg:() => p.svg}[p.type];
+    beforeAfter:() => renderBeforeAfter(p), cards:() => renderCards(p), table:() => renderTable(p), figure:() => renderFigure(p), svg:() => cleanSvg(p.svg)}[p.type];
   return `<div class="pic">${r ? r() : `<div class="warn">Unknown picture type: ${esc(p.type)}</div>`}</div>`;
 }
 

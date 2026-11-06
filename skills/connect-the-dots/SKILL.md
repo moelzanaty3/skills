@@ -70,9 +70,11 @@ When you can publish an HTML artifact, deliver the lesson as an **interactive pa
 
 Because the buttons reveal pre-written layers, write every layer for every step: simpler, example, why and deeper. That's what makes the page work on its own.
 
-In chat, keep the reply short: the link, the plain-English summary, the route, and "start with step 1, or ask me anything here". Chat commands keep working; when a chat answer improves on the page (a better example, a missing item), update the page too.
+Without artifacts but able to write files (e.g. GitHub Copilot, or an agent in an editor or terminal), build the same page and save it as a local file, such as `<topic>-lesson.html`, in a scratch or temp folder rather than the project's source unless the learner says where. Give its full path so they can open it in a browser. Don't say it's open or rendered unless you opened it.
 
-Without artifacts, teach in chat as described in the rest of this skill, and still keep the ledger: show it as a compact coverage table at the end of the lesson or on request.
+In chat, keep the reply short: the link or file path, the plain-English summary, the route, and "start with step 1, or ask me anything here". Chat commands keep working; when a chat answer improves on the page (a better example, a missing item), update the page too.
+
+Without artifacts or file access, teach in chat as described in the rest of this skill, and still keep the ledger: show it as a compact coverage table at the end of the lesson or on request.
 
 ## Teaching one chunk
 

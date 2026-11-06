@@ -1,0 +1,693 @@
+<!doctype html>
+<!--
+  Connect the Dots — interactive lesson engine (modern UI: Inter, no handwriting or italics).
+  Fill in ONLY the LESSON object (bottom of the file). Schema and layouts: references/lesson-schema.md.
+  The engine renders the map, route, step layers, "I'm lost", "Save my place", the source coverage
+  ledger and the revision sheet from that one object, and flags gaps in the Coverage tab.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Modern, calm UI: one sans-serif (Inter), no handwriting, no italics, soft surfaces, one accent colour. */
+:root{
+  --bg:#f6f6f8;--card:#ffffff;--paper:#f2f2f5;--grid:#ececf1;--line:rgba(17,17,26,.10);--line-strong:rgba(17,17,26,.18);
+  --text:#16161d;--ink:#16161d;--muted:#6b6b78;
+  --accent:#5b5bd6;--accent-bg:rgba(91,91,214,.10);--accent-ink:#ffffff;
+  --cool:#0e9384;--cool-bg:rgba(14,147,132,.10);--good:#16a34a;--good-bg:rgba(22,163,74,.10);--bad:#dc2626;--bad-bg:rgba(220,38,38,.08);
+  --shadow:0 1px 2px rgba(16,16,24,.04),0 12px 32px -16px rgba(16,16,24,.14);
+  --hand:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;--label:var(--hand);--body:var(--hand);
+  --r-lg:20px;--r-md:14px;--r-sm:10px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e0e12;--card:#17171d;--paper:#1d1d24;--grid:#24242c;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);
+  --text:#ececf1;--ink:#ececf1;--muted:#9a9aa8;--accent:#8b8bf5;--accent-bg:rgba(139,139,245,.14);--accent-ink:#0e0e12;
+  --cool:#3fd0bd;--cool-bg:rgba(63,208,189,.12);--good:#4ade80;--good-bg:rgba(74,222,128,.12);--bad:#f87171;--bad-bg:rgba(248,113,113,.12);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 32px -16px rgba(0,0,0,.6)}}
+:root[data-theme="dark"]{
+  --bg:#0e0e12;--card:#17171d;--paper:#1d1d24;--grid:#24242c;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);
+  --text:#ececf1;--ink:#ececf1;--muted:#9a9aa8;--accent:#8b8bf5;--accent-bg:rgba(139,139,245,.14);--accent-ink:#0e0e12;
+  --cool:#3fd0bd;--cool-bg:rgba(63,208,189,.12);--good:#4ade80;--good-bg:rgba(74,222,128,.12);--bad:#f87171;--bad-bg:rgba(248,113,113,.12);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 32px -16px rgba(0,0,0,.6)}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font:16px/1.65 var(--body);-webkit-font-smoothing:antialiased;font-synthesis:none;font-feature-settings:'cv11','ss01'}
+em,i,cite{font-style:normal}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px 72px}
+h1,h2,h3{font-family:var(--hand);color:var(--text);margin:0;letter-spacing:-.02em}
+h1{font-size:1.15rem;font-weight:650;line-height:1.3}h2{font-size:1.75rem;font-weight:700;line-height:1.2;margin-bottom:10px}h3{font-size:1.1rem;font-weight:650;margin:22px 0 8px}
+.uline{display:inline-flex;align-items:center;gap:10px}
+.uline::before{content:'';width:12px;height:12px;border-radius:4px;background:linear-gradient(135deg,var(--accent),var(--cool))}
+mark{background:var(--accent-bg);color:inherit;padding:0 3px;border-radius:4px}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--paper);padding:1px 6px;border-radius:6px}
+p{margin:0 0 12px}
+button{font:500 .9rem/1.2 var(--body);color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 13px;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+button:hover{background:var(--paper);border-color:var(--line-strong)}
+button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:600}
+button.primary:hover{filter:brightness(1.06);background:var(--accent)}
+button[aria-pressed="true"]{background:var(--accent-bg);color:var(--accent);border-color:transparent}
+.top{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between;padding:14px 0;margin-bottom:6px;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line)}
+.tools{display:flex;flex-wrap:wrap;gap:6px}
+.tools button{padding:7px 11px;font-size:.85rem}
+.orient{display:flex;flex-wrap:wrap;gap:4px 18px;background:transparent;padding:6px 2px;margin:12px 0 4px;font-size:.88rem;color:var(--text)}
+.orient b{font-weight:600;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-inline-end:6px}
+.route{display:flex;gap:6px;overflow-x:auto;padding:6px 2px 12px;scrollbar-width:thin}
+.route button{white-space:nowrap;border-radius:999px;padding:7px 14px;font-size:.85rem;background:var(--card)}
+.route button[aria-current]{background:var(--text);color:var(--bg);border-color:transparent}
+.route button.done::before{content:'✓ ';color:var(--good);font-weight:700}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:28px;margin:12px 0;box-shadow:var(--shadow)}
+.muted{color:var(--muted)}
+a{color:var(--accent);text-decoration:none;font-weight:500}a:hover{text-decoration:underline;text-underline-offset:3px}
+.small{font-size:.86rem}
+ol,ul{padding-inline-start:22px}li{margin:4px 0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 4px}
+.chip{font:500 .76rem var(--body);background:var(--paper);border-radius:999px;padding:3px 10px;color:var(--muted)}
+.mark{border-left:3px solid var(--line-strong);padding:8px 12px;margin:10px 0;border-radius:0 var(--r-sm) var(--r-sm) 0;background:var(--paper);font-size:.92rem}
+.mark b{font-weight:600}
+.mark.source{border-color:var(--accent)}.mark.inference{border-color:var(--cool)}.mark.open{border-color:var(--bad)}.mark.background{border-color:var(--muted)}
+.layers{display:inline-flex;flex-wrap:wrap;gap:4px;margin:18px 0 6px;padding:4px;background:var(--paper);border-radius:12px}
+.layers button{border:0;background:transparent;padding:7px 12px;border-radius:9px}
+.layers button[aria-pressed="true"]{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(16,16,24,.12)}
+.layer{border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;margin:8px 0;background:var(--paper)}
+.layer h4{margin:0 0 6px;font:600 .72rem var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--accent)}
+.connect{border-top:1px solid var(--line);margin-top:18px;padding-top:14px;font-size:.95rem}
+.connect b{font-weight:600}
+.principle{border:0;border-radius:var(--r-md);padding:16px 18px;margin-top:18px;font:600 1.12rem/1.45 var(--body);color:var(--text);background:linear-gradient(135deg,var(--accent-bg),var(--cool-bg));text-align:start}
+.principle small{display:block;font:600 .7rem var(--body);color:var(--accent);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}
+.principle.small{font-size:1rem}
+.nav{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;margin-top:22px}
+details.check{border:1px solid var(--line);border-radius:var(--r-md);padding:12px 16px;margin-top:14px;background:var(--card)}
+details.check summary{cursor:pointer;font-weight:600}
+details.check p{margin:10px 0 0;color:var(--muted)}
+.banner{background:var(--accent-bg);border:0;border-radius:var(--r-md);padding:10px 14px;margin:10px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.warn{background:var(--bad-bg);border-radius:var(--r-md);padding:10px 14px;margin:10px 0}
+.ok{background:var(--good-bg);border-radius:var(--r-md);padding:10px 14px;margin:10px 0}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:.92rem}
+th,td{border-bottom:1px solid var(--line);padding:10px 12px;text-align:start;vertical-align:top}
+th{font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--paper)}
+tr:last-child td{border-bottom:0}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-md)}
+/* ---- pictures ---- */
+.pic{margin:16px 0}
+.pic svg{width:100%;height:auto;display:block;margin-inline:auto}
+.picnote{color:var(--muted);font-size:.88rem;margin:8px 0 18px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.8rem;color:var(--muted);margin-top:6px}
+.legend svg{width:38px;height:10px;display:inline-block;vertical-align:middle;margin-inline-end:4px}
+svg .nbox{fill:var(--card);stroke:var(--line-strong);stroke-width:1.5}
+svg .node.focus .nbox{stroke:var(--accent);stroke-width:2.5;fill:var(--accent-bg)}
+svg .node.done .nbox{stroke:var(--good)}
+svg .node.notread .nbox{stroke:var(--muted);stroke-dasharray:6 5}
+svg .node.notread .ntext{fill:var(--muted)}
+svg .node[tabindex]{cursor:pointer}
+svg .node[tabindex]:hover .nbox{stroke:var(--accent)}
+svg .ntext{font:600 14px var(--body);fill:var(--text)}
+svg .here{font:600 12px var(--body);fill:var(--accent)}
+svg .eline{stroke:var(--muted);stroke-width:1.6;fill:none;stroke-linecap:round}
+svg .eline.async{stroke-dasharray:7 6}
+svg .eline.depends{stroke-dasharray:2 5;stroke-width:2}
+svg .eline.causes{stroke-width:2.8;stroke:var(--accent)}
+svg .elabel{font:500 12px var(--body);fill:var(--muted);paint-order:stroke;stroke:var(--card);stroke-width:5px;stroke-linejoin:round}
+svg .life{stroke:var(--line-strong);stroke-width:1.5;stroke-dasharray:4 5}
+svg .msg.focus .eline{stroke:var(--accent);stroke-width:2.6}
+svg .msg.focus .elabel{fill:var(--accent);font-weight:600}
+svg .snote{fill:var(--accent-bg);stroke:none}
+svg .snotet{font:500 12.5px var(--body);fill:var(--text)}
+.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:6px}
+.fstep{flex:1 1 140px;min-width:120px;max-width:230px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--paper);padding:12px 14px}
+.fstep .who{font-size:.68rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px}
+.fstep .lbl{font-weight:600;color:var(--text);line-height:1.35}
+.fstep .sub{font-size:.85rem;color:var(--muted);margin-top:2px}
+.fstep .branch{font-size:.82rem;color:var(--bad);margin-top:6px}
+.fstep.decision{border-style:dashed}
+.fstep.end{background:var(--card)}
+.fstep.focus{border-color:var(--accent);background:var(--accent-bg);box-shadow:0 0 0 1px var(--accent) inset}
+.farrow{display:flex;flex-direction:column;justify-content:center;align-items:center;font-size:.72rem;color:var(--muted);min-width:46px;text-align:center}
+.farrow span:first-child{font-size:1.1rem;color:var(--muted);line-height:1}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.split>.side{padding:18px;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r-md);background:var(--paper)}
+.split>.side .when{margin-top:auto}
+.split>.side .pc{margin-bottom:12px}
+.band{display:inline-block;font:700 1.15rem/1.2 var(--body);color:var(--text);padding:0;letter-spacing:-.01em}
+.side.warm .band::before,.side.cool .band::before{content:'';display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:8px;vertical-align:middle}
+.side.warm .band::before{background:var(--accent)}.side.cool .band::before{background:var(--cool)}
+.subtitle{font:500 .9rem var(--body);color:var(--muted);margin:2px 0 6px}
+.tagline{font-size:1rem;color:var(--text);margin:4px 0}
+.pc{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+.pc h4{margin:0;font:600 .7rem var(--body);text-transform:uppercase;letter-spacing:.08em}
+.pc .pros h4{color:var(--good)}.pc .cons h4{color:var(--bad)}
+.pc ul{list-style:none;margin:6px 0 0;padding:0}
+.pc li{font-size:.9rem;line-height:1.4;margin:6px 0;display:flex;gap:8px;align-items:flex-start}
+.ico{flex:0 0 auto;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;margin-top:1px}
+.ico.yes{color:var(--good);background:var(--good-bg)}.ico.no{color:var(--bad);background:var(--bad-bg)}
+.when{margin-top:12px;border-radius:var(--r-sm);padding:8px 12px;font-size:.9rem;background:var(--card);border:1px solid var(--line)}
+.when b{font-weight:600;color:var(--accent);margin-inline-end:6px}
+.ba{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:stretch}
+.ba .panel{border:1px solid var(--line);border-radius:var(--r-md);padding:16px;background:var(--paper)}
+.ba .panel+.mid+.panel{background:var(--accent-bg);border-color:transparent}
+.ba .panel h4{margin:0 0 8px;font:600 .72rem var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.ba .mid{font-size:.75rem;color:var(--muted);text-align:center;display:flex;flex-direction:column;justify-content:center}
+.ba .mid span{display:block;font-size:1.3rem;color:var(--muted);line-height:1}
+.ba ul{margin:0;padding-inline-start:18px;font-size:.93rem}
+.ba .cap{font-weight:600;font-size:.85rem;color:var(--bad);margin-top:8px}
+.tag{font:600 .64rem var(--body);letter-spacing:.06em;border-radius:6px;padding:1px 6px;margin-inline-start:6px;vertical-align:middle}
+.tag.new{background:var(--good-bg);color:var(--good)}.tag.changed{background:var(--accent-bg);color:var(--accent)}.tag.removed{background:var(--bad-bg);color:var(--bad)}
+li.removed{text-decoration:line-through;color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.cards .c{border:1px solid var(--line);border-radius:var(--r-md);padding:16px;background:var(--paper)}
+.cards .c.focus{border-color:var(--accent);background:var(--accent-bg);box-shadow:0 0 0 1px var(--accent) inset}
+.cards .ic{font-size:1.3rem;margin-bottom:6px}
+.cards .t{font-weight:600;font-size:1rem;color:var(--text);line-height:1.3}
+.cards .x{font-size:.9rem;color:var(--muted);margin-top:4px}
+.cards .cp{font-weight:600;font-size:.76rem;color:var(--accent);margin-top:8px;text-transform:uppercase;letter-spacing:.06em}
+.fig{position:relative;display:inline-block;max-width:100%}
+.fig img{max-width:100%;display:block;border:1px solid var(--line);border-radius:var(--r-md)}
+.pin{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font:600 .8rem var(--body);border:2px solid #fff;padding:0;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.pins{margin:10px 0 0;padding-inline-start:22px}
+.pins li.on{background:var(--accent-bg);border-radius:6px}
+dialog{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--card);color:var(--text);max-width:min(720px,94vw);padding:24px;box-shadow:0 24px 64px -16px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(10,10,16,.45);backdrop-filter:blur(4px)}
+pre.ck{white-space:pre-wrap;font:.85rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-sm);padding:12px;max-height:50vh;overflow:auto}
+.sheet .row{display:grid;grid-template-columns:minmax(120px,240px) 1fr;gap:12px;border-bottom:1px solid var(--line);padding:10px 0}
+.sheet .row b{font-weight:600;color:var(--text)}
+.filters{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+[hidden]{display:none!important}
+@media (max-width:680px){
+  .card{padding:20px;border-radius:16px}
+  h2{font-size:1.4rem}
+  .split{grid-template-columns:1fr}
+  .ba{grid-template-columns:1fr}.ba .mid span{transform:rotate(90deg)}
+  .pc{grid-template-columns:1fr}
+  .flow{flex-direction:column}.fstep{max-width:none}.farrow{flex-direction:row;gap:6px;min-height:28px}.farrow span:first-child{transform:rotate(90deg)}
+  .sheet .row{grid-template-columns:1fr}
+  .top{position:static}
+}
+@media print{
+  body{background:#fff}.top .tools,.route,.orient,.nav,.layers,.banner,#tabs{display:none!important}
+  .card{break-inside:avoid;box-shadow:none;border-color:#ddd}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1><span class="uline" id="title"></span></h1>
+    <div class="tools" id="tabs">
+      <button data-view="coverage" id="bCov"></button>
+      <button data-view="sheet" id="bSheet"></button>
+      <button id="bLost"></button>
+      <button id="bSave"></button>
+      <button id="bReset"></button>
+    </div>
+  </div>
+  <div id="resume" class="banner" hidden></div>
+  <div class="orient" id="orient" aria-live="polite"></div>
+  <nav class="route" id="route" aria-label="Lesson route"></nav>
+  <main id="view"></main>
+</div>
+<dialog id="dlg" aria-labelledby="dlgT"><div id="dlgBody"></div><div class="nav"><span></span><button id="dlgClose"></button></div></dialog>
+
+<script>
+// ======================================================================
+// EDIT THIS OBJECT ONLY. Schema: references/lesson-schema.md
+// ======================================================================
+const LESSON = {
+  topic: 'Scaling a web service',
+  goal: 'Know the two ways to give a service more capacity, and when to pick each.',
+  summary: 'When a service gets more traffic than one machine can handle, you either make that machine **bigger** (scale up) or add **more** machines that share the work (scale out). Scaling up is simple but has a ceiling and one point of failure. Scaling out has no hard ceiling and survives a dead server, but needs a load balancer and servers that keep no customer state.',
+  runningExample: 'A shop website that handles 200 orders a minute today and expects 2,000 on Black Friday.',
+  principle: 'Scale up while it is cheap and simple; design to scale out before you hit the ceiling.',
+  source: {
+    title: 'Two sample sketchnotes on vertical vs horizontal scaling',
+    read: ['Sketchnote A (whole image)', 'Sketchnote B (whole image)'],
+    notRead: ['Sketchnote B: the right half of "When to use" is cut off at "High Traffic,"']
+  },
+  map: {
+    nodes: [
+      {id:'traffic', label:'More traffic', x:20, y:120},
+      {id:'up', label:'Scale up (bigger server)', x:270, y:20},
+      {id:'out', label:'Scale out (more servers)', x:270, y:220},
+      {id:'lb', label:'Load balancer', x:540, y:220},
+      {id:'choice', label:'When to use which', x:540, y:20}
+    ],
+    edges: [
+      {from:'traffic', to:'up', label:'option 1', kind:'flow'},
+      {from:'traffic', to:'out', label:'option 2', kind:'flow'},
+      {from:'out', to:'lb', label:'needs', kind:'depends'},
+      {from:'up', to:'choice', label:'trade-offs feed', kind:'causes'},
+      {from:'out', to:'choice', label:'trade-offs feed', kind:'causes'}
+    ]
+  },
+  terms: [
+    {term:'Vertical scaling (scale up)', meaning:'Give one server more CPU, memory or disk.', step:'s2'},
+    {term:'Horizontal scaling (scale out)', meaning:'Add more servers that share the work.', step:'s3'},
+    {term:'Load balancer', meaning:'The front door that spreads requests across servers.', step:'s3'},
+    {term:'Single point of failure', meaning:'One part whose failure takes everything down.', step:'s2'},
+    {term:'Stateless server', meaning:'A server that keeps no customer data between requests, so any server can serve any request.', step:'s4'}
+  ],
+  steps: [
+    {
+      id:'s1', title:'The problem', concepts:['traffic'],
+      why:'Every option later is an answer to this one problem.',
+      idea:'One server can only handle so many requests a second. Past that point, pages slow down and then requests fail.\n\nThe shop handles 200 orders a minute today. Black Friday brings 2,000. The question is **where the extra capacity comes from**.',
+      picture:{type:'cards', items:[
+        {icon:'🛒', title:'Today', text:'200 orders / min', caption:'one server copes'},
+        {icon:'🔥', title:'Black Friday', text:'2,000 orders / min', caption:'one server can\'t'},
+        {icon:'❓', title:'The question', text:'Where does the extra capacity come from?', caption:'two answers'}
+      ], focus:2},
+      pictureNote:'Same shop, ten times the load. The rest of the lesson answers the last card.',
+      simpler:'One cashier, a queue out the door. You either get a faster cashier or open more tills.',
+      example:'At 2,000 orders a minute the single server hits 100% CPU, checkout takes 20 seconds, and some customers see errors.',
+      whyLayer:'Without a plan, the busiest day of the year is the day the site falls over.',
+      deeper:'Capacity is limited by whichever resource runs out first: CPU, memory, disk speed, network or database connections. Measure which one before choosing a fix.',
+      connection:'This is the starting point. Next: the first answer, making the one server bigger.',
+      takeaway:'More traffic than one server can take means you need more capacity from somewhere.',
+      check:{q:'If the bottleneck is the database, does a bigger web server help?', a:'Not much. The fix has to target the resource that runs out first.'}
+    },
+    {
+      id:'s2', title:'Scale up: a bigger server', concepts:['up'],
+      why:'It is the quickest fix, and you need to know its limits.',
+      idea:'**Scaling up** (also called **vertical scaling**) means swapping the server for a bigger one: more CPU, more memory, a faster disk. The code doesn\'t change, and there is still only **one** server.',
+      picture:{type:'beforeAfter',
+        before:{title:'Before', items:['2 vCPU','8 GB RAM']},
+        after:{title:'After (bigger)', items:[{text:'16 vCPU',tag:'changed'},{text:'64 GB RAM',tag:'changed'},{text:'Faster disk',tag:'new'}]},
+        arrowLabel:'upgrade', caption:'Still ONE server'},
+      pictureNote:'Same single machine, more power. The caption is the catch.',
+      simpler:'Hire one faster cashier. Same till, same queue, served quicker.',
+      example:'The shop moves from 2 to 16 vCPUs. Black Friday works, but if that one machine reboots, the whole shop is down.',
+      whyLayer:'It buys capacity without changing code, which is why teams try it first.',
+      deeper:'Machines have a largest size, and the price per unit of capacity usually rises near the top end. Upgrading often needs a restart, which means downtime unless there is a second machine.',
+      connection:'It answers the problem from step 1 for a while. Its two limits, a ceiling and one point of failure, lead to step 3.',
+      takeaway:'Scaling up is simple, but there is a ceiling and still only one server.',
+      refs:['Sketchnote A, left','Sketchnote B, left'],
+      marks:[{kind:'inference', text:'"Expensive" in sketchnote A is true mainly at the top end of machine sizes, not always.'}]
+    },
+    {
+      id:'s3', title:'Scale out: more servers', concepts:['out','lb'],
+      why:'This removes the ceiling and the single point of failure.',
+      idea:'**Scaling out** (also called **horizontal scaling**) means running **several** copies of the service. A **load balancer** sits in front and hands each request to one of them.',
+      picture:{type:'sequence',
+        participants:[{id:'c',label:'Customer'},{id:'lb',label:'Load balancer'},{id:'s1',label:'Server 1'},{id:'s2',label:'Server 2'}],
+        messages:[
+          {from:'c',to:'lb',label:'order A'},
+          {from:'lb',to:'s1',label:'send A to S1'},
+          {from:'c',to:'lb',label:'order B'},
+          {from:'lb',to:'s2',label:'send B to S2'},
+          {note:'S1 dies', over:'s1'},
+          {from:'c',to:'lb',label:'order C'},
+          {from:'lb',to:'s2',label:'skip S1, send C to S2'}
+        ], focus:6},
+      pictureNote:'The highlighted message is the point: when a server dies, the load balancer routes around it.',
+      simpler:'Open more tills, with someone at the door pointing each customer to a free one.',
+      example:'For Black Friday the shop runs 10 servers behind a load balancer. One crashes at 11:02; customers don\'t notice because the other 9 take its share.',
+      whyLayer:'There is no single machine to outgrow, and no single machine whose failure stops the shop.',
+      deeper:'The load balancer needs health checks to know a server is dead. Capacity can grow and shrink automatically (autoscaling) when servers are interchangeable.',
+      connection:'It fixes both limits from step 2, but only if any server can handle any request. That condition is step 4.',
+      takeaway:'Scale out = many servers behind a load balancer; one can fail and the service keeps going.',
+      refs:['Sketchnote A, right','Sketchnote B, right']
+    },
+    {
+      id:'s4', title:'When to use which', concepts:['choice'],
+      why:'This is the decision you actually have to make.',
+      idea:'Put the two side by side. Scaling up wins on simplicity. Scaling out wins on capacity and survival, but asks more of the design: servers must be **stateless**, so any of them can serve any customer.',
+      picture:{type:'compare',
+        left:{title:'Vertical scaling', subtitle:'(Scale up)', tagline:'= Make ==ONE== server ==BIGGER==', tone:'warm',
+          pros:['Simple','Fast upgrade','No code change'], cons:['Hardware ceiling','Single point of failure','Pricey at the top sizes'], when:'Early stage, low–medium traffic'},
+        right:{title:'Horizontal scaling', subtitle:'(Scale out)', tagline:'= Add ==MORE== servers', tone:'cool',
+          pros:['No hard ceiling','Survives a server failing','Grow in small steps'], cons:['More moving parts','Servers must be stateless','Shared data needs care (DB, sessions)'], when:'High and growing traffic'}
+      },
+      pictureNote:'Same three questions for both sides: what it is, pros and cons, when to use.',
+      simpler:'Small shop: get a faster cashier. Big, busy shop: more tills and a greeter.',
+      example:'The shop scales up for this Black Friday (no time to change code), and moves sessions out of server memory so it can scale out next year.',
+      whyLayer:'Picking the wrong one either wastes effort early or hits a wall at the worst moment.',
+      deeper:'Most real systems do both: scale the database up (hard to split) and the web servers out (easy to copy).',
+      connection:'This pulls steps 2 and 3 into one decision about the problem from step 1.',
+      takeaway:'Start by scaling up; make servers stateless so you can scale out before the ceiling.',
+      refs:['Sketchnote A, "When to use"','Sketchnote B, "When to use?"'],
+      marks:[{kind:'open', text:'Sketchnote B cuts off after "High Traffic,", so anything after the comma is unknown.'}],
+      check:{q:'Your servers keep the shopping basket in memory. What breaks when you add a second server?', a:'A customer\'s next request may land on the other server, which doesn\'t have their basket. Move the basket to a shared store first.'}
+    }
+  ],
+  ledger: [
+    {id:'L1', item:'Vertical = make one server bigger (scale up)', kind:'text', ref:'A, B', step:'s2'},
+    {id:'L2', item:'Example sizes 2 vCPU / 8 GB → 16 vCPU / 64 GB', kind:'number', ref:'A, B', step:'s2'},
+    {id:'L3', item:'"+ Faster Disk"', kind:'diagram', ref:'B', step:'s2'},
+    {id:'L4', item:'"Still ONE server"', kind:'diagram', ref:'B', step:'s2'},
+    {id:'L5', item:'Vertical pros: simple, fast upgrade / quick setup, no code change', kind:'text', ref:'A, B', step:'s4'},
+    {id:'L6', item:'Vertical cons: limited capacity, expensive, single point of failure', kind:'text', ref:'A, B', step:'s4'},
+    {id:'L7', item:'Horizontal = add more servers, distribute load', kind:'text', ref:'A, B', step:'s3'},
+    {id:'L8', item:'Load balancer in front of S1…S4', kind:'diagram', ref:'A, B', step:'s3'},
+    {id:'L9', item:'Horizontal pros: high capacity, fault tolerant, pay-as-you-grow', kind:'text', ref:'A, B', step:'s4'},
+    {id:'L10', item:'Horizontal cons: complexity, state management, network/consistency issues, requires stateless architecture', kind:'text', ref:'A, B', step:'s4'},
+    {id:'L11', item:'When to use: vertical for early stage / low–medium traffic', kind:'text', ref:'A, B', step:'s4'},
+    {id:'L12', item:'When to use: horizontal for high & growing traffic', kind:'text', ref:'A, B', step:'s4'},
+    {id:'L13', item:'Text after "High Traffic," in sketchnote B', kind:'text', ref:'B', status:'unreadable', note:'Cut off in the image'},
+    {id:'L14', item:'Decorative icons (gear, storm cloud, bar charts)', kind:'diagram', ref:'A, B', status:'skipped', note:'Decoration; the meaning is in the labels beside them'}
+  ],
+  recap: {
+    connections:['More traffic → needs capacity','Scale up → simple, but ceiling + single point of failure','Scale out → load balancer + stateless servers → no ceiling, survives failure'],
+    misunderstanding:{wrong:'Scaling out is always better.', right:'It costs design work. Scaling up is the right first move for small or early systems.'},
+    unexplored:['Autoscaling','Scaling the database (replicas, sharding)']
+  }
+};
+// ======================================================================
+// ENGINE (no edits needed below)
+// ======================================================================
+const UI = Object.assign({
+  map:'🗺 Map', coverage:'✔ Coverage', sheet:'📝 Revision sheet', lost:'😵 I\'m lost', save:'📌 Save my place', close:'Close',
+  learning:'Learning', here:'We are here', matters:'This matters because', overview:'the map (overview)', stepOf:'step {n} of {t}',
+  simpler:'Simpler', example:'Example', why:'Why?', deeper:'Go deeper', showMe:'Show me',
+  prev:'◀ Back', next:'Continue ▶', toMap:'Back to the map', start:'Start step 1 ▶', check:'Quick check (optional)', reveal:'Show answer',
+  takeaway:'Takeaway', connects:'How it connects', principle:'Principle',
+  lostTitle:'No problem — here\'s where we are', goal:'The goal', last:'The last relevant point', link:'How it connects to where we are', justStarting:'We\'re just starting.',
+  resume:'Welcome back — you were at', resumeBtn:'Resume', restart:'Start over', reset:'↺ Reset progress', resetTitle:'Reset your progress?', resetText:'This clears the steps you have viewed and your saved place in this browser, then takes you back to the map. The lesson itself does not change.', resetConfirm:'Reset and start again', cancel:'Cancel', copy:'Copy', copied:'Copied ✓', savedLocal:'Also saved in this browser.',
+  read:'Read', notRead:'Not read', route:'The route', recap:'Recap', misunderstanding:'Common misunderstanding', unexplored:'Still to explore', terms:'Key terms', runningEx:'Running example'
+}, LESSON.ui || {});
+const S = {current:-1, viewed:new Set(), layer:{}};
+const KEY = 'ctd:' + LESSON.topic;
+const $ = s => document.querySelector(s);
+function esc(s){return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function inline(s){return esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/==(.+?)==/g,'<mark>$1</mark>').replace(/`(.+?)`/g,'<code>$1</code>')}
+function md(s){
+  return String(s ?? '').split(/\n\s*\n/).map(block => {
+    const lines = block.split('\n');
+    if (lines.every(l => /^\s*- /.test(l))) return '<ul>' + lines.map(l => '<li>' + inline(l.replace(/^\s*- /,'')) + '</li>').join('') + '</ul>';
+    return '<p>' + lines.map(inline).join('<br>') + '</p>';
+  }).join('');
+}
+function load(){try{const d = JSON.parse(localStorage.getItem(KEY) || 'null'); if (d) return d}catch(e){} return null}
+function persist(){try{localStorage.setItem(KEY, JSON.stringify({current:S.current, viewed:[...S.viewed], font:document.documentElement.dataset.font || 'hand'}))}catch(e){}}
+const stepIndex = Object.fromEntries(LESSON.steps.map((s,i) => [s.id,i]));
+const nodeById = Object.fromEntries(LESSON.map.nodes.map(n => [n.id,n]));
+
+// ---------- pictures ----------
+function wrapText(label, max){
+  const words = String(label).split(/\s+/); const lines = []; let cur = '';
+  for (const w of words){ if ((cur + ' ' + w).trim().length > max && cur){lines.push(cur); cur = w} else cur = (cur + ' ' + w).trim() }
+  if (cur) lines.push(cur); return lines;
+}
+function arrowDefs(id){
+  return `<defs><marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="13" markerHeight="13" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker>
+  <marker id="${id}o" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto-start-reverse"><path d="M1 1L9 5L1 9" fill="none" stroke="var(--muted)" stroke-width="1.6"/></marker>
+  <marker id="${id}a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker></defs>`;
+}
+const EDGE_LEGEND = {flow:'leads to / calls', async:'event / message (async)', depends:'depends on', causes:'causes / feeds'};
+function legendHtml(kinds){
+  return '<div class="legend">' + [...kinds].map(k => `<span><svg viewBox="0 0 38 10"><line x1="2" y1="5" x2="36" y2="5" class="eline ${k}"/></svg>${esc(EDGE_LEGEND[k] || k)}</span>`).join('') + '</div>';
+}
+let uid = 0;
+function renderMap(map, focusIds = [], doneIds = new Set(), interactive = true){
+  const id = 'm' + (uid++), W = 180, H = 62;
+  const maxX = Math.max(...map.nodes.map(n => n.x + (n.w || W))) + 20, maxY = Math.max(...map.nodes.map(n => n.y + H)) + 40;
+  let s = `<svg viewBox="0 0 ${maxX} ${maxY}" style="max-width:${Math.round(maxX * 1.05)}px" role="img" aria-label="Concept map">${arrowDefs(id)}`;
+  const kinds = new Set(); let labels = '';
+  for (const e of map.edges){
+    const a = nodeById[e.from] || map.nodes.find(n => n.id === e.from), b = nodeById[e.to] || map.nodes.find(n => n.id === e.to);
+    if (!a || !b) continue;
+    const kind = e.kind || 'flow'; kinds.add(kind);
+    const aw = a.w || W, bw = b.w || W;
+    const ax = a.x + aw/2, ay = a.y + H/2, bx = b.x + bw/2, by = b.y + H/2, dx = bx - ax, dy = by - ay;
+    const clip = (w, sign) => { const t = Math.min((w/2 + 6) / Math.abs(dx || 1e-9), (H/2 + 6) / Math.abs(dy || 1e-9)); return t };
+    const ta = clip(aw), tb = clip(bw);
+    const x1 = ax + dx*ta, y1 = ay + dy*ta, x2 = bx - dx*tb, y2 = by - dy*tb;
+    const mk = kind === 'depends' ? `${id}o` : id;
+    s += `<g class="edge"><path class="eline ${kind}" d="M${x1} ${y1}L${x2} ${y2}" marker-end="url(#${mk})"/>`;
+    if (e.label){
+      // place the label beside the line (perpendicular offset), never on it
+      const len = Math.hypot(x2 - x1, y2 - y1) || 1; let nx = -(y2 - y1) / len, ny = (x2 - x1) / len; if (ny > 0){ nx = -nx; ny = -ny }
+      const lx = (x1 + x2)/2 + nx * 14, ly = (y1 + y2)/2 + ny * 14 + 4;
+      const anchor = Math.abs(nx) > 0.5 ? (nx < 0 ? 'end' : 'start') : 'middle';
+      labels += `<text class="elabel" x="${lx}" y="${ly}" text-anchor="${anchor}">${esc(e.label)}</text>`;
+    }
+    s += '</g>';
+  }
+  for (const n of map.nodes){
+    const w = n.w || W, focus = focusIds.includes(n.id), done = doneIds.has(n.id) && !focus, nr = n.status === 'notread';
+    const lines = wrapText(n.label, Math.floor(w / 9.5));
+    const target = LESSON.steps.findIndex(st => (st.concepts || []).includes(n.id));
+    const tab = interactive && target >= 0 ? ` tabindex="0" role="button" data-go="${target}" aria-label="Go to ${esc(n.label)}"` : '';
+    s += `<g class="node${focus?' focus':''}${done?' done':''}${nr?' notread':''}"${tab}><rect class="nbox" x="${n.x}" y="${n.y}" width="${w}" height="${H}" rx="12"/>`;
+    lines.forEach((l, i) => { s += `<text class="ntext" x="${n.x + w/2}" y="${n.y + H/2 + 5 + (i - (lines.length-1)/2) * 17}" text-anchor="middle">${i === 0 && done ? '✓ ' : ''}${esc(l)}</text>` });
+    if (nr) s += `<text class="elabel" x="${n.x + w/2}" y="${n.y + H + 16}" text-anchor="middle">(${esc(UI.notRead.toLowerCase())})</text>`;
+    if (focus) s += `<text class="here" x="${n.x + w/2}" y="${n.y + H + 18}" text-anchor="middle">◀ ${esc(UI.here.toLowerCase())}</text>`;
+    s += '</g>';
+  }
+  // labels last, so boxes never hide them
+  return s + labels + '</svg>' + legendHtml(kinds);
+}
+function renderSequence(p){
+  const id = 'q' + (uid++), n = p.participants.length, gap = Math.max(150, Math.min(220, 820 / n)), W = 60 + gap * (n - 1) + 120, row = 48;
+  const X = Object.fromEntries(p.participants.map((q, i) => [q.id, 80 + i * gap]));
+  const H = 70 + p.messages.length * row + 20;
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="max-width:${Math.round(W * 1.05)}px" role="img" aria-label="Sequence diagram">${arrowDefs(id)}`;
+  for (const q of p.participants){
+    s += `<line class="life" x1="${X[q.id]}" y1="52" x2="${X[q.id]}" y2="${H - 6}"/><rect class="nbox" x="${X[q.id] - 66}" y="8" width="132" height="42" rx="10"/><text class="ntext" x="${X[q.id]}" y="35" text-anchor="middle">${esc(q.label)}</text>`;
+  }
+  let num = 0;
+  p.messages.forEach((m, i) => {
+    const y = 84 + i * row, focus = p.focus === i;
+    if (m.note){
+      const x = X[m.over] ?? X[p.participants[0].id];
+      s += `<g class="msg${focus?' focus':''}"><rect class="snote" x="${x - Math.max(70, m.note.length * 3.6 + 12)}" y="${y - 20}" width="${Math.max(140, m.note.length * 7.2 + 24)}" height="28" rx="8"/><text class="snotet" x="${x}" y="${y - 1}" text-anchor="middle">${esc(m.note)}</text></g>`;
+      return;
+    }
+    num++;
+    const x1 = X[m.from], x2 = X[m.to], kind = m.kind === 'async' ? 'async' : m.kind === 'reply' ? 'async' : 'flow';
+    const mk = focus ? `${id}a` : (m.kind === 'reply' ? `${id}o` : id);
+    if (x1 === x2){
+      s += `<g class="msg${focus?' focus':''}"><path class="eline ${kind}" d="M${x1} ${y - 8}h46v18h-42" marker-end="url(#${mk})"/><text class="elabel" x="${x1 + 54}" y="${y + 4}">${num}. ${esc(m.label)}</text></g>`;
+    } else {
+      const dir = x2 > x1 ? 1 : -1;
+      s += `<g class="msg${focus?' focus':''}"><path class="eline ${kind}" d="M${x1 + dir*4} ${y}L${x2 - dir*6} ${y}" marker-end="url(#${mk})"/><text class="elabel" x="${(x1 + x2)/2}" y="${y - 8}" text-anchor="middle">${num}. ${esc(m.label)}</text></g>`;
+    }
+  });
+  return s + '</svg>' + legendHtml(new Set(p.messages.some(m => m.kind === 'async' || m.kind === 'reply') ? ['flow','async'] : ['flow']));
+}
+function renderFlow(p){
+  let h = '<div class="flow">';
+  p.steps.forEach((st, i) => {
+    if (i > 0){ const lab = (p.arrows || [])[i - 1]; h += `<div class="farrow" aria-hidden="true"><span>→</span>${lab ? `<span>${esc(lab)}</span>` : ''}</div>` }
+    h += `<div class="fstep ${st.kind || ''}${p.focus === i ? ' focus' : ''}">${st.who ? `<div class="who">${esc(st.who)}</div>` : ''}<div class="lbl">${i + 1}. ${inline(st.label)}</div>${st.sub ? `<div class="sub">${inline(st.sub)}</div>` : ''}${st.branch ? `<div class="branch">↳ ${inline(st.branch)}</div>` : ''}${p.focus === i ? `<div class="sub" style="color:var(--accent);font-weight:600">◀ ${esc(UI.here.toLowerCase())}</div>` : ''}</div>`;
+  });
+  return h + '</div>';
+}
+function renderCompare(p){
+  function side(x){
+    return `<div class="side ${x.tone || ''}"><div class="band">${esc(x.title)}</div>${x.subtitle ? `<div class="subtitle">${esc(x.subtitle)}</div>` : ''}${x.tagline ? `<div class="tagline">${inline(x.tagline)}</div>` : ''}${x.visual ? renderPicture(x.visual) : ''}
+      <div class="pc"><div class="pros"><h4>Pros</h4><ul>${(x.pros || []).map(t => `<li><span class="ico yes" aria-label="pro">✓</span>${inline(t)}</li>`).join('')}</ul></div>
+      <div class="cons"><h4>Cons</h4><ul>${(x.cons || []).map(t => `<li><span class="ico no" aria-label="con">✕</span>${inline(t)}</li>`).join('')}</ul></div></div>
+      ${x.when ? `<div class="when"><b>When to use:</b>${inline(x.when)}</div>` : ''}</div>`;
+  }
+  return `<div class="split">${side(p.left)}${side(p.right)}</div>${p.verdict ? `<div class="principle small">${inline(p.verdict)}</div>` : ''}`;
+}
+function renderBeforeAfter(p){
+  const li = it => typeof it === 'string' ? `<li>${inline(it)}</li>` : `<li class="${it.tag === 'removed' ? 'removed' : ''}">${inline(it.text)}${it.tag ? `<span class="tag ${it.tag}">${esc(it.tag.toUpperCase())}</span>` : ''}</li>`;
+  const panel = x => `<div class="panel"><h4>${esc(x.title)}</h4>${x.visual ? renderPicture(x.visual) : ''}<ul>${(x.items || []).map(li).join('')}</ul>${x.caption ? `<div class="cap">${inline(x.caption)}</div>` : ''}</div>`;
+  return `<div class="ba">${panel(p.before)}<div class="mid"><span>➜</span>${esc(p.arrowLabel || '')}</div>${panel(p.after)}</div>${p.caption ? `<div class="principle" style="border-style:dashed;color:var(--bad)">${inline(p.caption)}</div>` : ''}`;
+}
+function renderCards(p){
+  return `<div class="cards">${p.items.map((c, i) => `<div class="c${p.focus === i ? ' focus' : ''}">${c.icon ? `<div class="ic" aria-hidden="true">${esc(c.icon)}</div>` : ''}<div class="t">${esc(c.title)}</div>${c.text ? `<div class="x">${inline(c.text)}</div>` : ''}${c.caption ? `<div class="cp">${inline(c.caption)}</div>` : ''}</div>`).join('')}</div>`;
+}
+function renderTable(p){
+  return `<div class="tablewrap"><table><thead><tr>${p.columns.map(c => `<th>${inline(c)}</th>`).join('')}</tr></thead><tbody>${p.rows.map((r, i) => `<tr${p.focus === i ? ' style="background:var(--accent-bg)"' : ''}>${r.map(c => `<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+function renderFigure(p){
+  const fid = 'f' + (uid++);
+  return `<div class="fig" id="${fid}"><img src="${esc(p.src)}" alt="${esc(p.alt || '')}">${(p.pins || []).map((q, i) => `<button class="pin" style="left:${+q.x}%;top:${+q.y}%" data-pin="${fid}-${i}" aria-label="${i + 1}: ${esc(q.label)}">${i + 1}</button>`).join('')}</div>
+  <ol class="pins">${(p.pins || []).map((q, i) => `<li id="${fid}-${i}"><b>${esc(q.label)}</b>${q.text ? ' — ' + inline(q.text) : ''}</li>`).join('')}</ol>`;
+}
+function renderPicture(p){
+  if (!p) return '';
+  const r = {map:() => renderMap(p.map || LESSON.map, p.focus || [], new Set(), false), sequence:() => renderSequence(p), flow:() => renderFlow(p), compare:() => renderCompare(p),
+    beforeAfter:() => renderBeforeAfter(p), cards:() => renderCards(p), table:() => renderTable(p), figure:() => renderFigure(p), svg:() => p.svg}[p.type];
+  return `<div class="pic">${r ? r() : `<div class="warn">Unknown picture type: ${esc(p.type)}</div>`}</div>`;
+}
+
+// ---------- orientation / route ----------
+function doneConcepts(upto){return new Set(LESSON.steps.slice(0, Math.max(upto, 0)).filter(s => S.viewed.has(s.id)).flatMap(s => s.concepts || []))}
+function renderOrient(){
+  const i = S.current, st = LESSON.steps[i];
+  $('#orient').innerHTML = `<div><b>${esc(UI.learning)}:</b> ${esc(LESSON.topic)}</div><div><b>${esc(UI.here)}:</b> ${i < 0 ? esc(UI.overview) : esc(st.title) + ' — ' + esc(UI.stepOf.replace('{n}', i + 1).replace('{t}', LESSON.steps.length))}</div><div><b>${esc(UI.matters)}:</b> ${i < 0 ? inline(LESSON.goal) : inline(st.why)}</div>`;
+  $('#route').innerHTML = `<button data-go="-1"${i < 0 ? ' aria-current="step"' : ''}>${esc(UI.map)}</button>` + LESSON.steps.map((s, j) => `<button data-go="${j}" class="${S.viewed.has(s.id) && j !== i ? 'done' : ''}"${j === i ? ' aria-current="step"' : ''}>${j + 1}. ${esc(s.title)}</button>`).join('');
+  const cur = $('#route [aria-current]'); if (cur) cur.scrollIntoView({block:'nearest', inline:'nearest'});
+}
+// ---------- views ----------
+function viewMap(){
+  const src = LESSON.source || {};
+  return `<section class="card"><h2>${esc(LESSON.topic)}</h2>${md(LESSON.summary)}
+    ${src.title ? `<p class="small muted"><b>${esc(UI.read)}:</b> ${esc((src.read || []).join(' · ') || src.title)}${(src.notRead || []).length ? `<br><b>${esc(UI.notRead)}:</b> ${esc(src.notRead.join(' · '))}` : ''}</p>` : ''}
+    <div class="pic">${renderMap(LESSON.map, [], doneConcepts(LESSON.steps.length))}</div>
+    <p class="picnote">Click a box to jump to the step that explains it.</p>
+    <h3>${esc(UI.route)}</h3><ol>${LESSON.steps.map((s, j) => `<li><a href="#" data-go="${j}">${esc(s.title)}</a>${S.viewed.has(s.id) ? ' ✓' : ''} — <span class="muted">${inline(s.why)}</span></li>`).join('')}</ol>
+    ${LESSON.runningExample ? `<p><b>${esc(UI.runningEx)}:</b> ${inline(LESSON.runningExample)}</p>` : ''}
+    <div class="nav"><span></span><button class="primary" data-go="${LESSON.steps.findIndex(s => !S.viewed.has(s.id)) >= 0 ? LESSON.steps.findIndex(s => !S.viewed.has(s.id)) : 0}">${esc(UI.start)}</button></div></section>`;
+}
+function viewStep(i){
+  const st = LESSON.steps[i], open = S.layer[st.id];
+  const layers = [['simpler', UI.simpler], ['example', UI.example], ['whyLayer', UI.why], ['deeper', UI.deeper]].filter(([k]) => st[k]);
+  const marks = (st.marks || []).map(m => `<div class="mark ${esc(m.kind)}"><b>${esc({source:'Source', inference:'My inference', open:'Open question', background:'Background'}[m.kind] || m.kind)}:</b> ${inline(m.text)}</div>`).join('');
+  const next = LESSON.steps[i + 1];
+  return `<section class="card"><h2>Step ${i + 1}: ${esc(st.title)}</h2>
+    ${st.picture ? renderPicture(st.picture) + (st.pictureNote ? `<div class="picnote">${inline(st.pictureNote)}</div>` : '') : ''}
+    ${md(st.idea)}
+    ${marks}
+    ${layers.length ? `<div class="layers" role="group" aria-label="Explain differently">${layers.map(([k, l]) => `<button data-layer="${k}" aria-pressed="${open === k}">${esc(l)}</button>`).join('')}</div>` : ''}
+    ${open && st[open] ? `<div class="layer"><h4>${esc((layers.find(l => l[0] === open) || [])[1])}</h4>${md(st[open])}</div>` : ''}
+    ${st.connection ? `<div class="connect"><b>${esc(UI.connects)}:</b> ${inline(st.connection)}</div>` : ''}
+    ${st.check ? `<details class="check"><summary>${esc(UI.check)}: ${inline(st.check.q)}</summary><p>${inline(st.check.a)}</p></details>` : ''}
+    ${(st.refs || []).length ? `<div class="chips">${st.refs.map(r => `<span class="chip">📄 ${esc(r)}</span>`).join('')}</div>` : ''}
+    <div class="principle"><small>${esc(UI.takeaway)}</small>${inline(st.takeaway)}</div>
+    <div class="nav">${i > 0 ? `<button data-go="${i - 1}">${esc(UI.prev)}</button>` : '<span></span>'}<button data-go="-1">${esc(UI.toMap)}</button>${next ? `<button class="primary" data-go="${i + 1}">${esc(UI.next)} ${esc(next.title)}</button>` : `<button class="primary" data-view="sheet">${esc(UI.recap)} ▶</button>`}</div></section>`;
+}
+function validate(){
+  const w = [], ids = new Set();
+  for (const s of LESSON.steps){ if (ids.has(s.id)) w.push(`Duplicate step id ${s.id}`); ids.add(s.id); if (!s.takeaway) w.push(`Step "${s.title}" has no takeaway`); for (const c of s.concepts || []) if (!nodeById[c]) w.push(`Step "${s.title}" points at unknown map node "${c}"`) }
+  for (const n of LESSON.map.nodes) if (n.status !== 'notread' && !LESSON.steps.some(s => (s.concepts || []).includes(n.id))) w.push(`Map box "${n.label}" is not taught by any step`);
+  for (const e of LESSON.map.edges) if (!nodeById[e.from] || !nodeById[e.to]) w.push(`Arrow ${e.from} → ${e.to} points at a missing box`);
+  const lids = new Set();
+  for (const l of LESSON.ledger || []){
+    if (lids.has(l.id)) w.push(`Duplicate ledger id ${l.id}`); lids.add(l.id);
+    if (l.step && !(l.step in stepIndex)) w.push(`${l.id} points at missing step "${l.step}"`);
+    if (!l.step && !['skipped','unreadable'].includes(l.status)) w.push(`${l.id} "${l.item}" is not taught anywhere and not marked skipped/unreadable`);
+    if (['skipped','unreadable'].includes(l.status) && !l.note) w.push(`${l.id} is ${l.status} without a reason`);
+  }
+  for (const t of LESSON.terms || []) if (t.step && !(t.step in stepIndex)) w.push(`Term "${t.term}" points at missing step "${t.step}"`);
+  if (!(LESSON.ledger || []).length) w.push('No source ledger: coverage cannot be checked');
+  return w;
+}
+let covFilter = 'all';
+function viewCoverage(){
+  const L = LESSON.ledger || [], warns = validate();
+  const taught = L.filter(l => l.step), skipped = L.filter(l => l.status === 'skipped'), unread = L.filter(l => l.status === 'unreadable');
+  const seen = taught.filter(l => S.viewed.has(l.step));
+  const rows = L.filter(l => covFilter === 'all' || (covFilter === 'unseen' && l.step && !S.viewed.has(l.step)) || l.status === covFilter);
+  return `<section class="card"><h2>Source coverage</h2>
+    <p>Every distinct item found in the source, and where the lesson teaches it. Nothing is dropped silently: an item is either taught in a step, or marked skipped or unreadable with a reason.</p>
+    ${warns.length ? `<div class="warn"><b>Gaps found (${warns.length}):</b><ul>${warns.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : `<div class="ok"><b>Complete:</b> all ${L.length} source items are accounted for.</div>`}
+    <p><b>${taught.length}</b> taught · <b>${seen.length}</b> of those you've viewed · <b>${skipped.length}</b> skipped · <b>${unread.length}</b> unreadable</p>
+    <div class="filters" role="group" aria-label="Filter">${[['all','All'],['unseen','Not viewed yet'],['skipped','Skipped'],['unreadable','Unreadable']].map(([k, l]) => `<button data-filter="${k}" aria-pressed="${covFilter === k}">${l}</button>`).join('')}</div>
+    <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>Kind</th><th>Source</th><th>Taught in</th><th>Status</th></tr></thead><tbody>
+    ${rows.map(l => `<tr><td>${esc(l.id)}</td><td>${inline(l.item)}</td><td>${esc(l.kind || '')}</td><td>${esc(l.ref || '')}</td><td>${l.step && l.step in stepIndex ? `<a href="#" data-go="${stepIndex[l.step]}">Step ${stepIndex[l.step] + 1}: ${esc(LESSON.steps[stepIndex[l.step]].title)}</a>` : '—'}</td><td>${l.step ? (S.viewed.has(l.step) ? '✓ viewed' : 'to come') : esc(l.status || '?') + (l.note ? ': ' + esc(l.note) : '')}</td></tr>`).join('')}
+    </tbody></table></div></section>`;
+}
+function viewSheet(){
+  const r = LESSON.recap || {};
+  return `<section class="card sheet"><h2>${esc(LESSON.topic)} — ${esc(UI.sheet.replace(/^\W+\s*/, ''))}</h2>${md(LESSON.summary)}
+    <div class="pic">${renderMap(LESSON.map, [], new Set(), false)}</div>
+    ${LESSON.steps.map((s, j) => `<div class="row"><b>${j + 1}. ${esc(s.title)}</b><span>${inline(s.takeaway)}</span></div>`).join('')}
+    ${LESSON.runningExample ? `<p><b>${esc(UI.runningEx)}:</b> ${inline(LESSON.runningExample)}</p>` : ''}
+    ${(r.connections || []).length ? `<h3>Connections</h3><ul>${r.connections.map(c => `<li>${inline(c)}</li>`).join('')}</ul>` : ''}
+    ${r.misunderstanding ? `<h3>${esc(UI.misunderstanding)}</h3><p>✕ ${inline(r.misunderstanding.wrong)}<br>✓ ${inline(r.misunderstanding.right)}</p>` : ''}
+    ${(LESSON.terms || []).length ? `<h3>${esc(UI.terms)}</h3><ul>${LESSON.terms.map(t => `<li><b>${esc(t.term)}</b> = ${inline(t.meaning)}</li>`).join('')}</ul>` : ''}
+    ${(r.unexplored || []).length ? `<h3>${esc(UI.unexplored)}</h3><ul>${r.unexplored.map(c => `<li>${inline(c)}</li>`).join('')}</ul>` : ''}
+    ${LESSON.principle ? `<div class="principle"><small>${esc(UI.principle)}</small>${inline(LESSON.principle)}</div>` : ''}
+    <div class="nav"><button data-go="-1">${esc(UI.toMap)}</button><button onclick="print()">🖨 Print / PDF</button></div></section>`;
+}
+let view = 'map';
+function render(){
+  renderOrient();
+  $('#view').innerHTML = view === 'coverage' ? viewCoverage() : view === 'sheet' ? viewSheet() : S.current < 0 ? viewMap() : viewStep(S.current);
+  document.querySelectorAll('#tabs [data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === view || (b.dataset.view === 'map' && view === 'map' && S.current < 0))));
+}
+function go(i){
+  i = Math.max(-1, Math.min(LESSON.steps.length - 1, i));
+  S.current = i; view = i < 0 ? 'map' : 'step';
+  $('#resume').hidden = true;
+  if (i >= 0) S.viewed.add(LESSON.steps[i].id);
+  persist(); render(); window.scrollTo({top:0, behavior:'smooth'});
+}
+// ---------- dialogs ----------
+function openDialog(html){$('#dlgBody').innerHTML = html; $('#dlgClose').textContent = UI.close; $('#dlg').showModal()}
+function lost(){
+  const i = S.current, st = LESSON.steps[i], prev = LESSON.steps[i - 1];
+  openDialog(`<h2 id="dlgT">${esc(UI.lostTitle)}</h2><ul>
+    <li><b>${esc(UI.goal)}:</b> ${inline(LESSON.goal)}</li>
+    <li><b>${esc(UI.last)}:</b> ${prev ? inline(prev.takeaway) : esc(UI.justStarting)}</li>
+    <li><b>${esc(UI.link)}:</b> ${st ? inline(st.connection || st.why) : inline(LESSON.steps[0].why)}</li></ul>
+    <div class="pic">${renderMap(LESSON.map, st ? st.concepts || [] : [], doneConcepts(i), false)}</div>
+    <div class="nav"><button data-go="-1" data-close>${esc(UI.toMap)}</button><button class="primary" data-go="${Math.max(i, 0)}" data-close>${esc(UI.next)}</button></div>`);
+}
+function checkpoint(){
+  const i = S.current, st = LESSON.steps[i];
+  const covered = LESSON.steps.filter((s, j) => S.viewed.has(s.id) && j !== i).map(s => s.title);
+  const coveredIds = new Set(LESSON.steps.filter((s, j) => S.viewed.has(s.id) && j !== i).map(s => s.id));
+  const terms = (LESSON.terms || []).filter(t => !t.step || coveredIds.has(t.step)).map(t => `  - ${t.term} = ${t.meaning}`);
+  const open = LESSON.steps.flatMap(s => (s.marks || []).filter(m => m.kind === 'open').map(m => m.text)).concat((LESSON.ledger || []).filter(l => l.status === 'unreadable').map(l => `${l.item} (unreadable${l.note ? ': ' + l.note : ''})`));
+  const next = st ? (LESSON.steps[i + 1] ? LESSON.steps[i + 1].title : 'Recap') : LESSON.steps[0].title;
+  return [`CHECKPOINT — ${LESSON.topic} — ${new Date().toISOString().slice(0, 10)}`,
+    `Source: ${LESSON.source ? LESSON.source.title : '—'}${LESSON.source && (LESSON.source.notRead || []).length ? ' (not read: ' + LESSON.source.notRead.join('; ') + ')' : ''}`,
+    `Map: ${LESSON.map.nodes.map(n => n.label).join(' · ')}`,
+    `Covered: ${covered.join(', ') || 'nothing yet'}`,
+    `We are here: ${st ? `Step ${i + 1}, ${st.title}` : 'the overview map'}`,
+    `Running example: ${LESSON.runningExample || '—'}`,
+    `Key terms:${terms.length ? '\n' + terms.join('\n') : ' none yet'}`,
+    `Open questions: ${open.join(' · ') || 'none'}`,
+    `Next step: ${next}`,
+    'To resume: paste this into a chat with the connect-the-dots skill and say "continue".'].join('\n');
+}
+function resetProgress(){
+  S.viewed.clear(); S.layer = {}; S.current = -1; view = 'map';
+  try{ localStorage.removeItem(KEY) }catch(e){}
+  $('#resume').hidden = true;
+  if ($('#dlg').open) $('#dlg').close();
+  render(); window.scrollTo({top:0, behavior:'smooth'});
+}
+function confirmReset(){
+  openDialog(`<h2 id="dlgT">${esc(UI.resetTitle)}</h2><p>${esc(UI.resetText)}</p><div class="nav" style="justify-content:flex-end"><button id="noReset">${esc(UI.cancel)}</button><button class="primary" id="doReset">${esc(UI.resetConfirm)}</button></div>`);
+  const footer = $('#dlg > .nav'); footer.hidden = true;
+  $('#dlg').addEventListener('close', () => { footer.hidden = false }, {once:true});
+  $('#noReset').onclick = () => $('#dlg').close();
+  $('#doReset').onclick = resetProgress;
+}
+function save(){
+  persist();
+  const txt = checkpoint();
+  openDialog(`<h2 id="dlgT">${esc(UI.save)}</h2><pre class="ck" id="ck">${esc(txt)}</pre><p class="small muted">${esc(UI.savedLocal)}</p><div class="nav"><span></span><button id="copyCk">${esc(UI.copy)}</button></div>`);
+  $('#copyCk').onclick = async () => { try{ await navigator.clipboard.writeText(txt); $('#copyCk').textContent = UI.copied }catch(e){ const r = document.createRange(); r.selectNodeContents($('#ck')); getSelection().removeAllRanges(); getSelection().addRange(r) } };
+}
+// ---------- wiring ----------
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-go],[data-view],[data-layer],[data-filter],[data-pin]'); if (!t) return;
+  if (t.tagName === 'A') e.preventDefault();
+  if (t.hasAttribute('data-close')) $('#dlg').close();
+  if (t.dataset.go !== undefined) return go(+t.dataset.go);
+  if (t.dataset.view){ view = t.dataset.view === 'map' ? (S.current = -1, 'map') : t.dataset.view; return render() }
+  if (t.dataset.layer){ const st = LESSON.steps[S.current]; S.layer[st.id] = S.layer[st.id] === t.dataset.layer ? null : t.dataset.layer; return render() }
+  if (t.dataset.filter){ covFilter = t.dataset.filter; return render() }
+  if (t.dataset.pin){ document.querySelectorAll('.pins li').forEach(li => li.classList.toggle('on', li.id === t.dataset.pin)); document.getElementById(t.dataset.pin).scrollIntoView({block:'nearest'}) }
+});
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input,textarea') || $('#dlg').open) return;
+  const node = e.target.closest('[data-go]');
+  if (node && node.tagName === 'g' && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); return go(+node.dataset.go) }
+  if (e.key === 'ArrowRight' && view !== 'coverage') go(S.current + 1);
+  if (e.key === 'ArrowLeft' && view !== 'coverage') go(S.current - 1);
+  if (e.key === 'l') lost();
+  if (e.key === 'm') go(-1);
+});
+$('#bLost').onclick = lost; $('#bSave').onclick = save; $('#bReset').onclick = confirmReset; $('#dlgClose').onclick = () => $('#dlg').close();
+if ($('#bFont')) $('#bFont').onclick = () => { const r = document.documentElement; r.dataset.font = r.dataset.font === 'plain' ? 'hand' : 'plain'; persist() };
+function init(){
+  document.title = LESSON.topic; $('#title').textContent = LESSON.topic;
+  document.documentElement.lang = LESSON.lang || 'en'; document.documentElement.dir = LESSON.dir || 'ltr';
+  $('#bCov').textContent = UI.coverage; $('#bSheet').textContent = UI.sheet; $('#bLost').textContent = UI.lost; $('#bSave').textContent = UI.save; $('#bReset').textContent = UI.reset;
+  const saved = load();
+  if (saved){
+    (saved.viewed || []).forEach(v => S.viewed.add(v));
+    if (saved.font) document.documentElement.dataset.font = saved.font;
+    const st = LESSON.steps[saved.current];
+    if (st){ const b = $('#resume'); b.hidden = false; b.innerHTML = `<span>${esc(UI.resume)} <b>Step ${saved.current + 1}: ${esc(st.title)}</b></span><button class="primary" data-go="${saved.current}" id="rs">${esc(UI.resumeBtn)}</button><button id="rr">${esc(UI.restart)}</button>`;
+      $('#rs').addEventListener('click', () => { b.hidden = true }); $('#rr').onclick = resetProgress }
+  }
+  const w = validate(); if (w.length) console.warn('Lesson gaps:', w);
+  render();
+}
+init();
+</script>
+</body>
+</html>
